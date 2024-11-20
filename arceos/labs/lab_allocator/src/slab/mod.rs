@@ -16,12 +16,11 @@ mod slab;
 
 use slab::Slab;
 
-const SET_SIZE: usize = 64;
-const MIN_HEAP_SIZE: usize = 1;
+const SET_SIZE: usize = 96;
+const MIN_HEAP_SIZE: usize = 0x8000;
 
 enum HeapAllocator {
-    // Disable 64 bytes slab allocator for reduce memory fragmentation
-    // Slab64Bytes,
+    Slab96Bytes,
     Slab128Bytes,
     Slab256Bytes,
     Slab512Bytes,
@@ -34,7 +33,7 @@ enum HeapAllocator {
 /// A fixed size heap backed by multiple slabs with blocks of different sizes.
 /// Allocations over 4096 bytes are served by linked list allocator.
 pub struct Heap {
-    // slab_64_bytes: Slab<64>,
+    slab_96_bytes: Slab<96>,
     slab_128_bytes: Slab<128>,
     slab_256_bytes: Slab<256>,
     slab_512_bytes: Slab<512>,
@@ -66,7 +65,7 @@ impl Heap {
             "Heap size should be a multiple of minimum heap size"
         );
         Heap {
-            // slab_64_bytes: Slab::<64>::new(0, 0),
+            slab_96_bytes: Slab::<96>::new(0, 0),
             slab_128_bytes: Slab::<128>::new(0, 0),
             slab_256_bytes: Slab::<256>::new(0, 0),
             slab_512_bytes: Slab::<512>::new(0, 0),
@@ -107,7 +106,7 @@ impl Heap {
     /// given address is invalid.
     unsafe fn _grow(&mut self, mem_start_addr: usize, mem_size: usize, slab: HeapAllocator) {
         match slab {
-            // HeapAllocator::Slab64Bytes => self.slab_64_bytes.grow(mem_start_addr, mem_size),
+            HeapAllocator::Slab96Bytes => self.slab_96_bytes.grow(mem_start_addr, mem_size),
             HeapAllocator::Slab128Bytes => self.slab_128_bytes.grow(mem_start_addr, mem_size),
             HeapAllocator::Slab256Bytes => self.slab_256_bytes.grow(mem_start_addr, mem_size),
             HeapAllocator::Slab512Bytes => self.slab_512_bytes.grow(mem_start_addr, mem_size),
@@ -125,9 +124,9 @@ impl Heap {
     /// The runtime is in `O(1)` for chunks of size <= 4096, and `O(n)` when chunk size is > 4096,
     pub fn allocate(&mut self, layout: Layout) -> Result<usize, AllocError> {
         match Heap::layout_to_allocator(&layout) {
-            // HeapAllocator::Slab64Bytes => self
-            //     .slab_64_bytes
-            //     .allocate(layout, &mut self.tlsf_allocator),
+            HeapAllocator::Slab96Bytes => self
+                .slab_96_bytes
+                .allocate(layout, &mut self.tlsf_allocator),
             HeapAllocator::Slab128Bytes => self
                 .slab_128_bytes
                 .allocate(layout, &mut self.tlsf_allocator),
@@ -167,7 +166,7 @@ impl Heap {
     /// given address is invalid.
     pub unsafe fn deallocate(&mut self, ptr: usize, layout: Layout) {
         match Heap::layout_to_allocator(&layout) {
-            // HeapAllocator::Slab64Bytes => self.slab_64_bytes.deallocate(ptr),
+            HeapAllocator::Slab96Bytes => self.slab_96_bytes.deallocate(ptr),
             HeapAllocator::Slab128Bytes => self.slab_128_bytes.deallocate(ptr),
             HeapAllocator::Slab256Bytes => self.slab_256_bytes.deallocate(ptr),
             HeapAllocator::Slab512Bytes => self.slab_512_bytes.deallocate(ptr),
@@ -184,7 +183,7 @@ impl Heap {
     /// allocation created with the specified `layout`.
     pub fn usable_size(&self, layout: Layout) -> (usize, usize) {
         match Heap::layout_to_allocator(&layout) {
-            // HeapAllocator::Slab64Bytes => (layout.size(), 64),
+            HeapAllocator::Slab96Bytes => (layout.size(), 64),
             HeapAllocator::Slab128Bytes => (layout.size(), 128),
             HeapAllocator::Slab256Bytes => (layout.size(), 256),
             HeapAllocator::Slab512Bytes => (layout.size(), 512),
@@ -199,9 +198,9 @@ impl Heap {
     fn layout_to_allocator(layout: &Layout) -> HeapAllocator {
         if layout.size() > 4096 {
             HeapAllocator::TlsfByteAllocator
-        } else if layout.size() <= 64 && layout.align() <= 64 {
-        //     HeapAllocator::Slab64Bytes
-        // } else if layout.size() <= 128 && layout.align() <= 128 {
+        } else if layout.size() <= 96 && layout.align() <= 96 {
+            HeapAllocator::Slab96Bytes
+        } else if layout.size() <= 128 && layout.align() <= 128 {
             HeapAllocator::Slab128Bytes
         } else if layout.size() <= 256 && layout.align() <= 256 {
             HeapAllocator::Slab256Bytes
@@ -218,8 +217,8 @@ impl Heap {
 
     /// Returns total memory size in bytes of the heap.
     pub fn total_bytes(&self) -> usize {
-        // self.slab_64_bytes.total_blocks() * 64
-        self.slab_128_bytes.total_blocks() * 128
+        self.slab_96_bytes.total_blocks() * 96
+            + self.slab_128_bytes.total_blocks() * 128
             + self.slab_256_bytes.total_blocks() * 256
             + self.slab_512_bytes.total_blocks() * 512
             + self.slab_1024_bytes.total_blocks() * 1024
@@ -230,8 +229,8 @@ impl Heap {
 
     /// Returns allocated memory size in bytes.
     pub fn used_bytes(&self) -> usize {
-        // self.slab_64_bytes.used_blocks() * 64
-        self.slab_128_bytes.used_blocks() * 128
+        self.slab_96_bytes.used_blocks() * 96
+            + self.slab_128_bytes.used_blocks() * 128
             + self.slab_256_bytes.used_blocks() * 256
             + self.slab_512_bytes.used_blocks() * 512
             + self.slab_1024_bytes.used_blocks() * 1024

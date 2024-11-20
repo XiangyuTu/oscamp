@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 allocator = { git = "https://github.com/arceos-org/allocator.git", tag ="v0.1.0", features = ["bitmap","tlsf"] }
-sbi-rt = { version = "0.0.3", features = ["legacy"] }

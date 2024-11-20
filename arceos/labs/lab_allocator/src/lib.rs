@@ -45,6 +45,7 @@ impl BaseAllocator for LabByteAllocator {
 
 impl ByteAllocator for LabByteAllocator {
     fn alloc(&mut self, layout: Layout) -> AllocResult<NonNull<u8>> {
+        // println!("Allocating {}", layout.size());
         self.inner_mut()
             .allocate(layout)
             .map(|addr| unsafe { NonNull::new_unchecked(addr as *mut u8) })
@@ -65,31 +66,5 @@ impl ByteAllocator for LabByteAllocator {
 
     fn available_bytes(&self) -> usize {
         self.inner().available_bytes()
-    }
-}
-
-// Stdout for debugging
-struct Stdout;
-use core::fmt::Write;
-
-impl Write for Stdout {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        for c in s.chars() {
-            #[allow(deprecated)]
-            sbi_rt::legacy::console_putchar(c as usize);
-        }
-    
-        Ok(())
-    }
-}
-
-pub fn print(args: core::fmt::Arguments) {
-    Stdout.write_fmt(args).unwrap();
-}
-
-#[macro_export]
-macro_rules! println {
-    ($fmt: literal $(, $($arg: tt)+)?) => {
-        print(format_args!(concat!($fmt, "\n") $(, $($arg)+)?));
     }
 }

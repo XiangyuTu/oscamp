@@ -1,6 +1,6 @@
 use std::fs::{self, File, FileType};
 use std::io::{self, prelude::*};
-use std::{string::String, vec::Vec};
+use std::{string::{String, ToString}, vec::Vec};
 
 #[cfg(all(not(feature = "axstd"), unix))]
 use std::os::unix::fs::{FileTypeExt, PermissionsExt};
@@ -27,6 +27,8 @@ const CMD_TABLE: &[(&str, CmdHandler)] = &[
     ("pwd", do_pwd),
     ("rm", do_rm),
     ("uname", do_uname),
+    ("rename", do_rename),
+    ("mv", do_mv),
 ];
 
 fn file_type_to_char(ty: FileType) -> char {
@@ -270,6 +272,55 @@ fn do_help(_args: &str) {
 fn do_exit(_args: &str) {
     println!("Bye~");
     std::process::exit(0);
+}
+
+fn do_rename(args: &str){
+    let (old_name, new_name) = split_whitespace(args);
+    if old_name.is_empty() || new_name.is_empty() {
+        print_err!("rename", "missing operand");
+        return;
+    }
+
+    if let Err(e) = fs::rename(old_name, new_name) {
+        print_err!("rename", format_args!("cannot rename '{old_name}' to '{new_name}'"), e);
+    }
+}
+
+fn do_mv(args: &str) {
+    let (src, dst) = split_whitespace(args);
+
+    if src.is_empty() || dst.is_empty() {
+        print_err!("mv", "missing operand");
+        return;
+    }
+
+    let filename = src.rsplit('/').next().unwrap();
+    let dst = if dst.ends_with('/') {
+        &(dst.to_string() + filename)
+    } else {
+        let dst_metadata = fs::metadata(dst);
+        if dst_metadata.is_ok() && dst_metadata.unwrap().is_dir() {
+            &(dst.to_string() + "/" + filename)
+        } else {
+            dst
+        }
+    };
+
+
+    match fs::read(src) {
+        Ok(content) => {
+            match fs::write(dst, content) {
+                Ok(_) => {
+                    match fs::remove_file(src) {
+                        Ok(_) => {}
+                        Err(e) => print_err!("mv", src, e),
+                    }
+                }
+                Err(e) => print_err!("mv", dst, e),
+            }
+        }
+        Err(e) => print_err!("mv", src, e),
+    }
 }
 
 pub fn run_cmd(line: &[u8]) {

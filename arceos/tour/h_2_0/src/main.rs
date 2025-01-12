@@ -12,6 +12,7 @@ use axerrno::{ax_err_type, AxResult};
 use memory_addr::VirtAddr;
 use alloc::string::String;
 use std::fs::File;
+use std::io::Read;
 use riscv_vcpu::RISCVVCpu;
 use riscv_vcpu::AxVCpuExitReason::NestedPageFault;
 
@@ -60,15 +61,16 @@ fn main() {
                     assert_eq!(addr, 0x2200_0000.into(), "Now we ONLY handle pflash#2.");
                     let mapping_flags = MappingFlags::from_bits(0xf).unwrap();
                     // Passthrough-Mode
-                    let _ = aspace.map_linear(addr, addr.as_usize().into(), 4096, mapping_flags);
+                    // let _ = aspace.map_linear(addr, addr.as_usize().into(), 4096, mapping_flags);
 
-                    /*
+                    
                     // Emulator-Mode
                     // Pretend to load file to fill buffer.
-                    let buf = "pfld";
+                    let mut pflash = File::open("/sbin/pflash.img").expect("/sbin/pflash.img not found!!");
+                    let mut buf = vec![0u8; 4096];
+                    pflash.read(&mut buf);
                     aspace.map_alloc(addr, 4096, mapping_flags, true);
-                    aspace.write(addr, buf.as_bytes());
-                    */
+                    aspace.write(addr, &buf);
                 },
                 _ => {
                     panic!("Unhandled VM-Exit: {:?}", exit_reason);
